@@ -1,4 +1,60 @@
 ---
 title: "Analyzing School District Reading Scores"
 author: "Mireille"
+execute:
+  echo: false
 ---
+
+```{r}
+#| message: false
+library(tidyverse)
+library(DBI)
+library(duckdb)
+library(dbplyr)
+```
+
+```{r}
+#| cache: true
+#| cache.extra: !expr file.mtime("data/seda_2025.duckdb")
+con <- dbConnect(duckdb(), "data/seda_2025.duckdb", read_only = TRUE)
+dbListTables(con)
+dbplyr_dist <- tbl(con, "district_scores")
+dbplyr_dist
+dbplyr_dist |>
+  count(year) |>
+  collect() |>
+  arrange(year)
+dbplyr_dist |>
+  filter(!is.na(rla_score)) |>
+  group_by(year) |>
+  summarize(mean_rla_score = mean(rla_score)) |>
+  arrange(year) |>
+  show_query()
+district_2015 <- dbplyr_dist |>
+  filter(year == 2015, !is.na(rla_score)) |>
+  select(district_id, state, district_name, rla_2015 = rla_score)
+district_2023 <- dbplyr_dist |>
+  filter(year == 2023, !is.na(rla_score)) |>
+  select(district_id, state, district_name, rla_2023 = rla_score)
+score_change <- inner_join(
+  district_2015,
+  district_2023,
+  by = c("district_id", "state", "district_name")
+) |>
+  mutate(score_change = rla_2023 - rla_2015)
+
+state_scores <- tbl(con, "state_scores")
+state_2015 <- state_scores |>
+  filter(year == 2015, !is.na(rla_score)) |>
+  select(stateabb, state_name, rla_2015 = rla_score)
+state_2023 <- state_scores |>
+  filter(year == 2023, !is.na(rla_score)) |>
+  select(stateabb, state_name, rla_2023 = rla_score)
+state_change <- inner_join(
+  state_2015,
+  state_2023,
+  by = c("stateabb", "state_name")
+) |>
+  mutate(score_change = rla_2023 - rla_2015)
+state_change
+```
